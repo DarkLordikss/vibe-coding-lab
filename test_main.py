@@ -463,6 +463,150 @@ class TestInitDB(unittest.TestCase):
         mock_redis.set.assert_not_called()
 
 
+class TestAnalyticsHandler(tornado.testing.AsyncHTTPTestCase):
+    def get_app(self):
+        return main.make_app(autoreload=False, debug=False, serve_traceback=False)
+
+    @patch('main.r')
+    def test_get_analytics_success(self, mock_redis):
+        """Test successful GET request for analytics"""
+        # Use a function to return appropriate values based on key
+        def get_side_effect(key):
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            if key_str == 'hospital:autoID':
+                return b'2'
+            elif key_str == 'doctor:autoID':
+                return b'3'
+            elif key_str == 'patient:autoID':
+                return b'4'
+            elif key_str == 'diagnosis:autoID':
+                return b'2'
+            elif key_str == 'db_initiated':
+                return b'1'
+            return None
+        
+        def hgetall_side_effect(key):
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            if key_str == 'hospital:0':
+                return {b'name': b'Hospital 1', b'beds_number': b'100'}
+            elif key_str == 'hospital:1':
+                return {b'name': b'Hospital 2', b'beds_number': b'200'}
+            elif key_str == 'doctor:0':
+                return {b'surname': b'Doctor 1', b'hospital_ID': b'0'}
+            elif key_str == 'doctor:1':
+                return {b'surname': b'Doctor 2', b'hospital_ID': b'0'}
+            elif key_str == 'doctor:2':
+                return {b'surname': b'Doctor 3', b'hospital_ID': b'1'}
+            elif key_str == 'patient:0':
+                return {b'surname': b'Patient 1', b'sex': b'M'}
+            elif key_str == 'patient:1':
+                return {b'surname': b'Patient 2', b'sex': b'F'}
+            elif key_str == 'patient:2':
+                return {b'surname': b'Patient 3', b'sex': b'M'}
+            elif key_str == 'patient:3':
+                return {b'surname': b'Patient 4', b'sex': b'F'}
+            elif key_str == 'diagnosis:0':
+                return {b'patient_ID': b'0', b'type': b'Flu'}
+            elif key_str == 'diagnosis:1':
+                return {b'patient_ID': b'1', b'type': b'Cold'}
+            return {}
+        
+        def smembers_side_effect(key):
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            if key_str == 'doctor-patient:0':
+                return {b'0', b'1'}
+            elif key_str == 'doctor-patient:1':
+                return {b'2'}
+            return set()
+        
+        mock_redis.get.side_effect = get_side_effect
+        mock_redis.hgetall.side_effect = hgetall_side_effect
+        mock_redis.smembers.side_effect = smembers_side_effect
+        
+        response = self.fetch('/analytics')
+        self.assertEqual(response.code, 200)
+        
+        # Parse JSON response
+        import json
+        data = json.loads(response.body.decode('utf-8'))
+        
+        # Check structure
+        self.assertIn('summary', data)
+        self.assertIn('relationships', data)
+        self.assertIn('patient_statistics', data)
+        self.assertIn('hospital_statistics', data)
+        
+        # Check summary
+        # Total: 2 hospitals + 3 doctors + 4 patients + 2 diagnoses = 11
+        self.assertEqual(data['summary']['total_entities'], 11)
+        self.assertEqual(data['summary']['entity_counts']['hospitals'], 2)
+        self.assertEqual(data['summary']['entity_counts']['doctors'], 3)
+        self.assertEqual(data['summary']['entity_counts']['patients'], 4)
+        self.assertEqual(data['summary']['entity_counts']['diagnoses'], 2)
+
+    @patch('main.r')
+    def test_get_analytics_empty_database(self, mock_redis):
+        """Test analytics when database is empty"""
+        mock_redis.get.return_value = b'0'
+        mock_redis.hgetall.return_value = {}
+        mock_redis.smembers.return_value = set()
+        
+        response = self.fetch('/analytics')
+        self.assertEqual(response.code, 200)
+        
+        import json
+        data = json.loads(response.body.decode('utf-8'))
+        
+        self.assertEqual(data['summary']['total_entities'], 0)
+        self.assertEqual(data['summary']['entity_counts']['hospitals'], 0)
+
+    @patch('main.r')
+    def test_get_analytics_redis_connection_error(self, mock_redis):
+        """Test analytics when Redis connection fails"""
+        mock_redis.get.side_effect = redis.exceptions.ConnectionError()
+        
+        response = self.fetch('/analytics')
+        self.assertEqual(response.code, 400)
+        self.assertIn(b'Redis connection refused', response.body)
+
+    @patch('main.r')
+    def test_get_stats_brief(self, mock_redis):
+        """Test that /stats returns brief statistics (different from /analytics)"""
+        def get_side_effect(key):
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            if key_str in ['hospital:autoID', 'doctor:autoID', 'patient:autoID', 'diagnosis:autoID']:
+                return b'1'
+            elif key_str == 'db_initiated':
+                return b'1'
+            return None
+        
+        mock_redis.get.side_effect = get_side_effect
+        mock_redis.hgetall.return_value = {}
+        mock_redis.smembers.return_value = set()
+        
+        response = self.fetch('/stats')
+        self.assertEqual(response.code, 200)
+        
+        import json
+        data = json.loads(response.body.decode('utf-8'))
+        
+        # Stats should have brief format, not full analytics
+        self.assertIn('total_entities', data)
+        self.assertIn('hospitals', data)
+        self.assertIn('doctors', data)
+        self.assertIn('patients', data)
+        self.assertIn('diagnoses', data)
+        self.assertIn('doctor_patient_relationships', data)
+        self.assertIn('avg_patients_per_doctor', data)
+        self.assertIn('avg_diagnoses_per_patient', data)
+        
+        # Should NOT have detailed sections like analytics
+        self.assertNotIn('summary', data)
+        self.assertNotIn('relationships', data)
+        self.assertNotIn('patient_statistics', data)
+        self.assertNotIn('hospital_statistics', data)
+
+
 if __name__ == '__main__':
     unittest.main()
 

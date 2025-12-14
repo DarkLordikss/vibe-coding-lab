@@ -3,6 +3,7 @@
 Request handlers for the hospital management system.
 """
 
+import json
 import logging
 import tornado.web
 import redis.exceptions
@@ -30,6 +31,12 @@ class BaseHandler(tornado.web.RequestHandler):
                 error_handler(e)
             else:
                 self.handle_redis_error(e)
+            return None
+        except Exception as e:
+            # Log other exceptions and return error
+            logging.error(f"Error in operation: {e}", exc_info=True)
+            self.set_status(500)
+            self.write(f"Internal server error: {str(e)}")
             return None
 
 
@@ -331,13 +338,109 @@ class DoctorPatientHandler(BaseHandler):
             set_key = RedisKeys.doctor_patient_key(doctor_ID)
             db.add_to_set(set_key, patient_ID)
             
-            return None
+            return True  # Return True on success
         
         result = self.safe_redis_operation(operation)
         if result is not None:
             if isinstance(result, str):
+                # Error message
                 self.set_status(400)
                 self.write(result)
-            else:
+            elif result is True:
+                # Success
                 self.write(f"OK: doctor ID: {doctor_ID}, patient ID: {patient_ID}")
+        # If result is None, Redis connection error was already handled
+
+
+class AnalyticsHandler(BaseHandler):
+    """Handler for comprehensive analytics about the system."""
+    
+    def get(self):
+        """Get comprehensive analytics about the system."""
+        def operation():
+            db = get_database()
+            
+            # Get entity counts
+            hospitals_count = db.count_entities("hospital")
+            doctors_count = db.count_entities("doctor")
+            patients_count = db.count_entities("patient")
+            diagnoses_count = db.count_entities("diagnosis")
+            
+            total_entities = hospitals_count + doctors_count + patients_count + diagnoses_count
+            
+            # Get relationship statistics
+            doctor_patient_stats = db.get_patients_per_doctor_stats()
+            patient_diagnosis_stats = db.get_diagnoses_per_patient_stats()
+            
+            # Get patient statistics
+            patient_sex_distribution = db.get_patient_sex_distribution()
+            
+            # Get hospital statistics
+            hospital_statistics = db.get_hospital_statistics()
+            
+            analytics = {
+                "summary": {
+                    "total_entities": total_entities,
+                    "entity_counts": {
+                        "hospitals": hospitals_count,
+                        "doctors": doctors_count,
+                        "patients": patients_count,
+                        "diagnoses": diagnoses_count
+                    }
+                },
+                "relationships": {
+                    "doctor_patient": doctor_patient_stats,
+                    "patient_diagnosis": patient_diagnosis_stats
+                },
+                "patient_statistics": {
+                    "sex_distribution": patient_sex_distribution
+                },
+                "hospital_statistics": hospital_statistics
+            }
+            
+            return analytics
+        
+        result = self.safe_redis_operation(operation)
+        if result is not None:
+            self.set_header("Content-Type", "application/json")
+            self.write(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+class StatsHandler(BaseHandler):
+    """Handler for brief statistics about the system."""
+    
+    def get(self):
+        """Get brief statistics - only key metrics."""
+        def operation():
+            db = get_database()
+            
+            # Get only basic counts
+            hospitals_count = db.count_entities("hospital")
+            doctors_count = db.count_entities("doctor")
+            patients_count = db.count_entities("patient")
+            diagnoses_count = db.count_entities("diagnosis")
+            
+            total_entities = hospitals_count + doctors_count + patients_count + diagnoses_count
+            
+            # Get only key relationship metrics
+            doctor_patient_stats = db.get_patients_per_doctor_stats()
+            patient_diagnosis_stats = db.get_diagnoses_per_patient_stats()
+            
+            stats = {
+                "total_entities": total_entities,
+                "hospitals": hospitals_count,
+                "doctors": doctors_count,
+                "patients": patients_count,
+                "diagnoses": diagnoses_count,
+                "doctor_patient_relationships": doctor_patient_stats.get("total_relationships", 0),
+                "avg_patients_per_doctor": doctor_patient_stats.get("avg_patients_per_doctor", 0.0),
+                "avg_diagnoses_per_patient": patient_diagnosis_stats.get("avg_diagnoses_per_patient", 0.0)
+            }
+            
+            return stats
+        
+        result = self.safe_redis_operation(operation)
+        if result is not None:
+            self.set_header("Content-Type", "application/json")
+            self.write(json.dumps(result, indent=2, ensure_ascii=False))
 

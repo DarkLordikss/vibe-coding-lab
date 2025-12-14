@@ -77,12 +77,20 @@
   - `PatientHandler` - управление пациентами
   - `DiagnosisHandler` - управление диагнозами
   - `DoctorPatientHandler` - связи врач-пациент
+  - `AnalyticsHandler` - детальная аналитика системы
+  - `StatsHandler` - краткая статистика системы
 
 #### `database.py`
 - Абстракция для работы с Redis
 - Класс `Database` - обертка над Redis операциями
 - Класс `RedisKeys` - константы и утилиты для ключей Redis
 - Управление auto-increment ID для всех сущностей
+- Методы для сбора аналитики и статистики:
+  - `count_entities()` - подсчет сущностей
+  - `get_patients_per_doctor_stats()` - статистика пациентов на врача
+  - `get_diagnoses_per_patient_stats()` - статистика диагнозов на пациента
+  - `get_patient_sex_distribution()` - распределение пациентов по полу
+  - `get_hospital_statistics()` - детальная статистика по больницам
 
 ### Модель данных
 
@@ -401,6 +409,152 @@ OK: doctor ID: 1, patient ID: 1
 **Ошибки:**
 - `400` - "ID required"
 - `400` - "No such ID for doctor or patient"
+- `400` - "Redis connection refused"
+
+---
+
+#### 7. Аналитика (Analytics)
+
+**GET** `/analytics`
+
+Получить комплексную детальную аналитику по системе. Возвращает JSON с полной статистикой.
+
+**Пример запроса:**
+```bash
+curl http://localhost:8888/analytics
+```
+
+**Пример ответа:**
+```json
+{
+  "summary": {
+    "total_entities": 15,
+    "entity_counts": {
+      "hospitals": 2,
+      "doctors": 5,
+      "patients": 6,
+      "diagnoses": 2
+    }
+  },
+  "relationships": {
+    "doctor_patient": {
+      "total_relationships": 8,
+      "doctors_with_patients": 4,
+      "total_doctors": 5,
+      "avg_patients_per_doctor": 1.6
+    },
+    "patient_diagnosis": {
+      "total_diagnoses": 2,
+      "patients_with_diagnoses": 2,
+      "total_patients": 6,
+      "avg_diagnoses_per_patient": 0.33
+    }
+  },
+  "patient_statistics": {
+    "sex_distribution": {
+      "total": 6,
+      "male": 3,
+      "female": 3,
+      "male_percentage": 50.0,
+      "female_percentage": 50.0
+    }
+  },
+  "hospital_statistics": [
+    {
+      "id": "0",
+      "name": "City Hospital",
+      "beds_number": "200",
+      "doctors_count": 3
+    },
+    {
+      "id": "1",
+      "name": "Regional Hospital",
+      "beds_number": "150",
+      "doctors_count": 2
+    }
+  ]
+}
+```
+
+**Структура ответа:**
+
+- `summary` - общая сводка:
+  - `total_entities` - общее количество всех сущностей
+  - `entity_counts` - количество каждой сущности
+
+- `relationships` - статистика по связям:
+  - `doctor_patient` - статистика врач-пациент:
+    - `total_relationships` - общее количество связей
+    - `doctors_with_patients` - количество врачей с пациентами
+    - `total_doctors` - общее количество врачей
+    - `avg_patients_per_doctor` - среднее количество пациентов на врача
+  - `patient_diagnosis` - статистика пациент-диагноз:
+    - `total_diagnoses` - общее количество диагнозов
+    - `patients_with_diagnoses` - количество пациентов с диагнозами
+    - `total_patients` - общее количество пациентов
+    - `avg_diagnoses_per_patient` - среднее количество диагнозов на пациента
+
+- `patient_statistics` - статистика по пациентам:
+  - `sex_distribution` - распределение по полу:
+    - `total` - общее количество
+    - `male` - количество мужчин
+    - `female` - количество женщин
+    - `male_percentage` - процент мужчин
+    - `female_percentage` - процент женщин
+
+- `hospital_statistics` - детальная статистика по больницам:
+  - Массив объектов с информацией о каждой больнице:
+    - `id` - ID больницы
+    - `name` - название
+    - `beds_number` - количество коек
+    - `doctors_count` - количество врачей в больнице
+
+**Ошибки:**
+- `400` - "Redis connection refused"
+
+---
+
+#### 8. Краткая статистика (Stats)
+
+**GET** `/stats`
+
+Получить краткую статистику по системе. Возвращает JSON только с ключевыми метриками (без детальной информации).
+
+**Пример запроса:**
+```bash
+curl http://localhost:8888/stats
+```
+
+**Пример ответа:**
+```json
+{
+  "total_entities": 15,
+  "hospitals": 2,
+  "doctors": 5,
+  "patients": 6,
+  "diagnoses": 2,
+  "doctor_patient_relationships": 8,
+  "avg_patients_per_doctor": 1.6,
+  "avg_diagnoses_per_patient": 0.33
+}
+```
+
+**Структура ответа:**
+
+- `total_entities` - общее количество всех сущностей
+- `hospitals` - количество больниц
+- `doctors` - количество врачей
+- `patients` - количество пациентов
+- `diagnoses` - количество диагнозов
+- `doctor_patient_relationships` - общее количество связей врач-пациент
+- `avg_patients_per_doctor` - среднее количество пациентов на врача
+- `avg_diagnoses_per_patient` - среднее количество диагнозов на пациента
+
+**Разница между `/analytics` и `/stats`:**
+- `/analytics` - полная детальная аналитика со всеми разделами (summary, relationships, patient_statistics, hospital_statistics)
+- `/stats` - краткая статистика только с ключевыми метриками (быстрее, меньше данных)
+
+**Ошибки:**
 - `400` - "Redis connection refused"
 
 ---

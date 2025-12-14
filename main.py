@@ -11,7 +11,8 @@ from tornado.options import parse_command_line
 # Import handlers and database
 from handlers import (
     MainHandler, HospitalHandler, DoctorHandler, 
-    PatientHandler, DiagnosisHandler, DoctorPatientHandler
+    PatientHandler, DiagnosisHandler, DoctorPatientHandler,
+    AnalyticsHandler, StatsHandler
 )
 from database import initialize_database, RedisKeys
 
@@ -63,7 +64,9 @@ def make_app(autoreload=None, debug=None, serve_traceback=None):
         (r"/doctor", DoctorHandler),
         (r"/patient", PatientHandler),
         (r"/diagnosis", DiagnosisHandler),
-        (r"/doctor-patient", DoctorPatientHandler)
+        (r"/doctor-patient", DoctorPatientHandler),
+        (r"/analytics", AnalyticsHandler),
+        (r"/stats", StatsHandler)
     ], autoreload=autoreload, debug=debug, compiled_template_cache=False, serve_traceback=serve_traceback)
 
 
