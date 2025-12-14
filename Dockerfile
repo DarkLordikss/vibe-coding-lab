@@ -2,10 +2,15 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for building gevent and other packages
 RUN apt-get update && apt-get install -y \
-    gcc \
+    build-essential \
+    python3-dev \
+    libevent-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to latest version
+RUN pip install --upgrade pip
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
