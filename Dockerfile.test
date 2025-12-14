@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code and tests
 COPY main.py .
+COPY handlers.py .
+COPY database.py .
 COPY test_main.py .
 COPY load_test.py .
 COPY templates/ ./templates/
