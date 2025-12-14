@@ -718,6 +718,46 @@ current_id = db.get_auto_id("hospital")
 db.increment_auto_id("hospital")
 ```
 
+## CI/CD Pipeline
+
+Проект включает автоматизированный CI/CD pipeline на базе GitHub Actions.
+
+### Этапы Pipeline
+
+1. **Build** - Сборка Docker образа приложения
+2. **Unit Tests** - Запуск юнит-тестов локально
+3. **Docker Tests** - Запуск тестов в Docker контейнере
+4. **Load Tests** - Нагрузочное тестирование с помощью Locust
+5. **Deploy** - Автоматическое развертывание на VM через SSH
+
+### Настройка
+
+Для работы pipeline необходимо настроить GitHub Secrets:
+
+- `SSH_PRIVATE_KEY` - Приватный SSH ключ
+- `SSH_HOST` - IP адрес или домен VM
+- `SSH_USER` - Имя пользователя SSH
+- `SSH_PORT` - Порт SSH (опционально, по умолчанию 22)
+
+Подробные инструкции по настройке см. в [.github/SECRETS_SETUP.md](.github/SECRETS_SETUP.md)
+
+### Запуск Pipeline
+
+Pipeline запускается автоматически при:
+- Push в ветки `main` или `master`
+- Создании Pull Request в эти ветки
+- Ручном запуске через GitHub Actions UI
+
+**Важно:** CI/CD pipeline работает **только** для веток `main` и `master`. Для других веток pipeline не запускается.
+
+### Результаты
+
+- Все артефакты тестов сохраняются на 1 день
+- Отчеты нагрузочного тестирования доступны для скачивания
+- Сводка выполнения отображается в Actions tab
+
+Подробнее о pipeline см. [.github/workflows/README.md](.github/workflows/README.md)
+
 ## Лицензия
 
 Учебный проект для лабораторной работы.
